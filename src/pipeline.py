@@ -12,4 +12,5 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
     df = combine_retro_date(df)
     df = normalize_time(df)
     df = to_numeric_cols(df)
+    df = df[(df["date"] >= "2024-01-01") & (df["date"] <= pd.Timestamp.now())]
     return df
