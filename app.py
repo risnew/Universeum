@@ -167,6 +167,7 @@ with tab1:
             df.groupby("activity")
             .agg(avg_grade=("grade", "mean"), grade_std=("grade", "std"), count=("grade", "size"))
             .reset_index()
+            .fillna({"avg_grade": 0, "grade_std": 0})
         )
         st.plotly_chart(grade_chart(activity_stats), use_container_width=True)
 

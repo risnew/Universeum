@@ -26,9 +26,9 @@ LAYOUT_DEFAULTS = dict(
 
 def grade_chart(activity_stats: pd.DataFrame) -> Figure:
     """Create horizontal bar chart showing average grade per activity."""
-    max_height = 800
+    activity_stats = activity_stats.sort_values("avg_grade")
     bar_height = 35
-    fig_height = min(max_height, len(activity_stats) * bar_height)
+    fig_height = max(400, len(activity_stats) * bar_height)
 
     fig = px.bar(
         activity_stats,
@@ -58,11 +58,8 @@ def grade_chart(activity_stats: pd.DataFrame) -> Figure:
     fig.update_yaxes(showgrid=False)
 
     fig.update_layout(
-        **LAYOUT_DEFAULTS,
-        yaxis={"categoryorder": "total ascending"},
-        yaxis_title="",
-        xaxis_title="",
-        width=900,
+        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=40, t=30, b=20)},
+        yaxis=dict(automargin=True),
     )
 
     return fig
