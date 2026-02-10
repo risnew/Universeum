@@ -385,30 +385,9 @@ with tab5:
 # TAB 6: Adjustment Predictor (Beta)
 # =============================================================================
 with tab6:
-    st.subheader("Adjustment Category Predictor")
-    st.caption("Predict adjustment category from free-text descriptions using machine learning.")
-
     training_file = "data/additional_data.csv"
 
     try:
-        distribution = get_category_distribution(training_file)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.caption("Training Data Distribution")
-            st.plotly_chart(horizontal_bar_chart(distribution, "count", "category", "Samples", ".0f"), use_container_width=True)
-
-        with col2:
-            st.caption("Category Descriptions")
-            category_desc = pd.DataFrame([
-                {"Code": k, "Category": v}
-                for k, v in CATEGORY_NAMES.items()
-            ])
-            st.dataframe(category_desc, use_container_width=True, hide_index=True)
-
-        st.divider()
-
         @st.cache_resource
         def get_trained_classifier():
             texts, labels = load_training_data(training_file)
@@ -418,10 +397,7 @@ with tab6:
 
         classifier, metrics = get_trained_classifier()
 
-        st.caption(f"Model trained on {metrics['n_samples']} samples | Accuracy: {metrics['accuracy']:.1%} (+/- {metrics['std']:.1%})")
-
-        st.divider()
-
+        # --- Adjustments in Your Data ---
         st.subheader("Adjustments in Your Data")
 
         adjustments_with_text = df[df["adjustments"].notna() & (df["adjustments"].str.strip() != "")]
@@ -454,6 +430,31 @@ with tab6:
 
         st.divider()
 
+        # --- Adjustment Category Predictor ---
+        st.subheader("Adjustment Category Predictor")
+        st.caption("Predict adjustment category from free-text descriptions using machine learning.")
+
+        distribution = get_category_distribution(training_file)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.caption("Training Data Distribution")
+            st.plotly_chart(horizontal_bar_chart(distribution, "count", "category", "Samples", ".0f"), use_container_width=True)
+
+        with col2:
+            st.caption("Category Descriptions")
+            category_desc = pd.DataFrame([
+                {"Code": k, "Category": v}
+                for k, v in CATEGORY_NAMES.items()
+            ])
+            st.dataframe(category_desc, use_container_width=True, hide_index=True)
+
+        st.caption(f"Model trained on {metrics['n_samples']} samples | Accuracy: {metrics['accuracy']:.1%} (+/- {metrics['std']:.1%})")
+
+        st.divider()
+
+        # --- Test Prediction ---
         st.subheader("Test Prediction")
 
         input_text = st.text_area(
