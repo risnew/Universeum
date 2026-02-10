@@ -37,11 +37,11 @@ def grade_chart(activity_stats: pd.DataFrame) -> Figure:
         orientation="h",
         text="avg_grade",
         height=fig_height,
-        color_discrete_sequence=[COLORS["primary"]],
+        color_discrete_sequence=[COLORS["secondary"]],
     )
 
     fig.update_traces(
-        texttemplate="%{text:.2f}",
+        texttemplate="%{text:.1f}",
         textposition="outside",
         textfont=dict(color="#E0E0E0"),
         marker=dict(cornerradius=4),
