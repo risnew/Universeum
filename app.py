@@ -459,6 +459,7 @@ with tab6:
                 if pd.notna(t) and t.strip() else ""
             )
             display_cols = ["date", "activity", "adjustments", "predicted_category", "participants_avg"]
+            export_df = export_df[export_df["predicted_category"] != ""]
             st.dataframe(export_df[display_cols], use_container_width=True, hide_index=True)
             st.download_button(
                 "Download as CSV",
