@@ -425,20 +425,6 @@ with tab6:
                     use_container_width=True,
                     hide_index=True,
                 )
-            with st.expander("View Full Data with Predictions"):
-                export_df = df.copy()
-                export_df["predicted_category"] = export_df["adjustments"].apply(
-                    lambda t: classifier.predict(t).predicted_category
-                    if pd.notna(t) and t.strip() else ""
-                )
-                display_cols = ["date", "activity", "adjustments", "predicted_category", "participants_avg"]
-                st.dataframe(export_df[display_cols], use_container_width=True, hide_index=True)
-                st.download_button(
-                    "Download as CSV",
-                    export_df[display_cols].to_csv(index=False),
-                    file_name="universeum_data_with_predictions.csv",
-                    mime="text/csv",
-                )
         else:
             st.info("No adjustment texts found in the uploaded data.")
 
@@ -465,6 +451,21 @@ with tab6:
             st.dataframe(category_desc, use_container_width=True, hide_index=True)
 
         st.caption(f"Model trained on {metrics['n_samples']} samples | Accuracy: {metrics['accuracy']:.1%} (+/- {metrics['std']:.1%})")
+
+        with st.expander("View Full Data with Predictions"):
+            export_df = df.copy()
+            export_df["predicted_category"] = export_df["adjustments"].apply(
+                lambda t: classifier.predict(t).predicted_category
+                if pd.notna(t) and t.strip() else ""
+            )
+            display_cols = ["date", "activity", "adjustments", "predicted_category", "participants_avg"]
+            st.dataframe(export_df[display_cols], use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download as CSV",
+                export_df[display_cols].to_csv(index=False),
+                file_name="universeum_data_with_predictions.csv",
+                mime="text/csv",
+            )
 
         st.divider()
 
