@@ -431,8 +431,7 @@ with tab6:
                     lambda t: classifier.predict(t).predicted_category
                     if pd.notna(t) and t.strip() else ""
                 )
-                display_cols = [c for c in export_df.columns if c != "participants_avg"]
-                display_cols.append("participants_avg")
+                display_cols = ["date", "activity", "adjustments", "predicted_category", "participants_avg"]
                 st.dataframe(export_df[display_cols], use_container_width=True, hide_index=True)
                 st.download_button(
                     "Download as CSV",
