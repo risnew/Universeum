@@ -12,12 +12,15 @@ from src.charts import (
     activity_heatmap,
     trend_chart,
     line_chart,
+    bar_chart_time,
     pie_chart,
     bar_chart,
     horizontal_bar_chart,
+    interest_bar_chart,
     scatter_with_trendline,
     hour_distribution_chart,
     participants_by_hour_chart,
+    INTEREST_LEVEL_COLORS,
 )
 from src.analysis import (
     compare_periods,
@@ -113,6 +116,16 @@ df = process_data(pd.read_csv(uploaded_file))
 # Compute average participants from range (e.g., "3-6" -> 4.5)
 df["participants_avg"] = df["participants"].apply(avg_range)
 
+
+def extract_activity_type(name: str) -> str:
+    """Extract activity type from activity name (text before ':'), or 'Övrigt'."""
+    if isinstance(name, str) and ":" in name:
+        return name.split(":")[0].strip()
+    return "Övrigt"
+
+
+MIN_SESSIONS = 10
+
 # --- KPIs ---
 col1, col2, col3 = st.columns(3)
 col1.metric("Total sessions", len(df))
@@ -141,7 +154,7 @@ with tab1:
         st.caption("Interest Level Distribution")
         st.plotly_chart(interest_chart(df), use_container_width=True)
     with col2:
-        st.caption("Grade Distribution")
+        st.caption("Performance Distribution")
         st.plotly_chart(grade_distribution_chart(df), use_container_width=True)
 
     # Row 2: Time-based charts
@@ -150,7 +163,7 @@ with tab1:
         st.caption("Activities Over Time")
         st.plotly_chart(activities_over_time_chart(df), use_container_width=True)
     with col2:
-        st.caption("Activity Heatmap (Day & Hour)")
+        st.caption("Activity Heatmap (Weekday & Hour)")
         st.plotly_chart(activity_heatmap(df), use_container_width=True)
 
     # Row 3: Participation by hour
@@ -159,23 +172,60 @@ with tab1:
     df_with_hour = df_with_hour.dropna(subset=["hour"])
     if len(df_with_hour) > 0:
         st.caption("Average Participation by Hour")
+        st.caption(f"Average total participants per session at each hour of the day.")
         st.plotly_chart(participants_by_hour_chart(df_with_hour), use_container_width=True)
 
     # Row 4: Activity details (expandable)
-    with st.expander("Average Grade per Activity"):
+    with st.expander("Average Performance per Activity"):
         activity_stats = (
             df.groupby("activity")
             .agg(avg_grade=("grade", "mean"), grade_std=("grade", "std"), count=("grade", "size"))
             .reset_index()
             .fillna({"avg_grade": 0, "grade_std": 0})
         )
-        st.plotly_chart(grade_chart(activity_stats), use_container_width=True)
+        filtered_stats = activity_stats[activity_stats["count"] >= MIN_SESSIONS]
+        st.caption(f"Only showing activities with at least {MIN_SESSIONS} sessions. ({len(filtered_stats)} of {len(activity_stats)} activities)")
+        st.plotly_chart(grade_chart(filtered_stats), use_container_width=True)
 
     with st.expander("Average Participants per Activity"):
         activity_participants = (
-            df.groupby("activity")["participants_avg"].mean().reset_index().sort_values("participants_avg")
+            df.groupby("activity")
+            .agg(participants_avg=("participants_avg", "mean"), count=("participants_avg", "size"))
+            .reset_index()
+            .sort_values("participants_avg")
         )
-        st.plotly_chart(participants_chart(activity_participants), use_container_width=True)
+        filtered_participants = activity_participants[activity_participants["count"] >= MIN_SESSIONS]
+        st.caption(f"Only showing activities with at least {MIN_SESSIONS} sessions. ({len(filtered_participants)} of {len(activity_participants)} activities)")
+        st.plotly_chart(participants_chart(filtered_participants), use_container_width=True)
+
+    st.divider()
+
+    # Row 5: Activity type aggregations
+    st.subheader("Average Performance & Participants per Activity Type")
+    df_typed = df.copy()
+    df_typed["activity_type"] = df_typed["activity"].apply(extract_activity_type)
+
+    type_stats = (
+        df_typed.groupby("activity_type")
+        .agg(avg_grade=("grade", "mean"), participants_avg=("participants_avg", "mean"), count=("grade", "size"))
+        .reset_index()
+    )
+    filtered_type_stats = type_stats[type_stats["count"] >= MIN_SESSIONS]
+    st.caption(f"Only showing activity types with at least {MIN_SESSIONS} sessions.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.caption("Average Performance per Activity Type")
+        st.plotly_chart(
+            grade_chart(filtered_type_stats.rename(columns={"activity_type": "activity"})),
+            use_container_width=True,
+        )
+    with col2:
+        st.caption("Average Participants per Activity Type")
+        st.plotly_chart(
+            participants_chart(filtered_type_stats.rename(columns={"activity_type": "activity"})),
+            use_container_width=True,
+        )
 
 # =============================================================================
 # TAB 2: Activity Deep Dive
@@ -202,20 +252,20 @@ with tab2:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.caption("Grade Over Time")
+        st.caption("Grade Over Time (Monthly Average)")
         if len(activity_data) > 1:
             activity_by_month = activity_data.groupby(activity_data["date"].dt.to_period("M"))["grade"].mean().reset_index()
             activity_by_month["date"] = activity_by_month["date"].dt.to_timestamp()
-            st.plotly_chart(line_chart(activity_by_month, "date", "grade", "Grade"), use_container_width=True)
+            st.plotly_chart(bar_chart_time(activity_by_month, "date", "grade", "Grade"), use_container_width=True)
         else:
             st.info("Not enough data for trend.")
 
     with col2:
-        st.caption("Participants Over Time")
+        st.caption("Participants Over Time (Monthly Average)")
         if len(activity_data) > 1:
             participants_by_month = activity_data.groupby(activity_data["date"].dt.to_period("M"))["participants_avg"].mean().reset_index()
             participants_by_month["date"] = participants_by_month["date"].dt.to_timestamp()
-            st.plotly_chart(line_chart(participants_by_month, "date", "participants_avg", "Participants"), use_container_width=True)
+            st.plotly_chart(bar_chart_time(participants_by_month, "date", "participants_avg", "Participants"), use_container_width=True)
         else:
             st.info("Not enough data for trend.")
 
@@ -228,7 +278,10 @@ with tab2:
         interest_counts = activity_data["interest_level"].value_counts().reset_index()
         interest_counts.columns = ["interest_level", "count"]
         if len(interest_counts) > 0:
-            st.plotly_chart(pie_chart(interest_counts, "count", "interest_level"), use_container_width=True)
+            st.plotly_chart(
+                pie_chart(interest_counts, "count", "interest_level", color_map=INTEREST_LEVEL_COLORS),
+                use_container_width=True,
+            )
 
     with col2:
         st.caption("When Does This Activity Run?")
@@ -246,6 +299,7 @@ with tab2:
         activity_with_hour = activity_with_hour.dropna(subset=["hour"])
         if len(activity_with_hour) > 0:
             st.caption("Average Participation by Hour")
+            st.caption("Average total participants per session at each hour of the day.")
             st.plotly_chart(participants_by_hour_chart(activity_with_hour), use_container_width=True)
 
     with st.expander("Recent Sessions"):
@@ -257,69 +311,88 @@ with tab2:
 # =============================================================================
 with tab3:
     st.subheader("Correlation Insights")
-    st.caption("Explore relationships between different metrics.")
+
+    # Activity type filter
+    df_typed_corr = df.copy()
+    df_typed_corr["activity_type"] = df_typed_corr["activity"].apply(extract_activity_type)
+    all_types = sorted(df_typed_corr["activity_type"].unique())
+    selected_types = st.multiselect(
+        "Filter by activity type (leave empty for all)",
+        all_types,
+        default=all_types,
+        key="corr_type_filter",
+    )
+    df_corr = df_typed_corr[df_typed_corr["activity_type"].isin(selected_types)] if selected_types else df_typed_corr
+
+    if len(selected_types) == len(all_types) or not selected_types:
+        st.caption("Based on all activity types.")
+    else:
+        st.caption(f"Based on activity types: {', '.join(selected_types)}.")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.caption("Participants vs Grade")
-        st.plotly_chart(scatter_with_trendline(df, "participants_avg", "grade", "Participants", "Grade"), use_container_width=True)
+        st.caption("Participants vs Performance")
+        st.plotly_chart(scatter_with_trendline(df_corr, "participants_avg", "grade", "Participants", "Performance"), use_container_width=True)
 
-        corr = df[["participants_avg", "grade"]].corr().iloc[0, 1]
+        corr = df_corr[["participants_avg", "grade"]].corr().iloc[0, 1]
+        st.caption(f"Each point is one session. The line shows the overall trend. Correlation coefficient: **{corr:.2f}**.")
         if corr > 0.1:
-            st.caption(f"Correlation: **{corr:.2f}** - Larger groups tend to get slightly higher grades")
+            st.caption("Larger groups tend to give slightly higher grades.")
         elif corr < -0.1:
-            st.caption(f"Correlation: **{corr:.2f}** - Larger groups tend to get slightly lower grades")
+            st.caption("Larger groups tend to give slightly lower grades.")
         else:
-            st.caption(f"Correlation: **{corr:.2f}** - No significant relationship between group size and grade")
+            st.caption("No significant relationship found between group size and performance.")
 
     with col2:
-        st.caption("Grade by Interest Level")
-        interest_grade = df.groupby("interest_level")["grade"].mean().reset_index()
-        interest_grade = interest_grade.sort_values("grade", ascending=True)
-        st.plotly_chart(horizontal_bar_chart(interest_grade, "grade", "interest_level", "Average Grade"), use_container_width=True)
+        st.caption("Average Performance by Interest Level")
+        interest_grade = df_corr.groupby("interest_level")["grade"].mean().reset_index()
+        st.plotly_chart(interest_bar_chart(interest_grade, "grade", "Average Performance"), use_container_width=True)
 
     st.divider()
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.caption("Participants by Interest Level")
-        interest_participants = df.groupby("interest_level")["participants_avg"].mean().reset_index()
-        interest_participants = interest_participants.sort_values("participants_avg", ascending=True)
-        st.plotly_chart(horizontal_bar_chart(interest_participants, "participants_avg", "interest_level", "Average Participants", ".1f"), use_container_width=True)
+        st.caption("Average Participants by Interest Level")
+        interest_participants = df_corr.groupby("interest_level")["participants_avg"].mean().reset_index()
+        st.plotly_chart(interest_bar_chart(interest_participants, "participants_avg", "Average Participants", ".1f"), use_container_width=True)
 
     with col2:
-        st.caption("Grade by Day of Week")
-        df_copy = df.copy()
+        st.caption("Average Performance by Day of Week")
+        df_copy = df_corr.copy()
         df_copy["day_of_week"] = df_copy["date"].dt.day_name()
         day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         day_grade = df_copy.groupby("day_of_week")["grade"].mean().reset_index()
         day_grade["day_of_week"] = pd.Categorical(day_grade["day_of_week"], categories=day_order, ordered=True)
         day_grade = day_grade.sort_values("day_of_week")
-        st.plotly_chart(bar_chart(day_grade, "day_of_week", "grade", "", "Average Grade"), use_container_width=True)
+        st.plotly_chart(bar_chart(day_grade, "day_of_week", "grade", "", "Average Performance"), use_container_width=True)
 
 # =============================================================================
 # TAB 4: Trends
 # =============================================================================
+MIN_MONTHS = 5
+
 with tab4:
-    st.subheader("Grade Trend Over Time")
+    st.subheader("Performance Trend Over Time")
     grade_trend = calculate_trend(df, "grade")
-    if len(grade_trend) > 0:
+    if len(grade_trend) >= MIN_MONTHS:
         trend_direction = "improving" if grade_trend["trend"].iloc[0] > 0 else "declining"
-        st.caption(f"Overall trend: grades are **{trend_direction}**")
-        st.plotly_chart(trend_chart(grade_trend, "grade", "Average Grade"), use_container_width=True)
+        st.caption(f"Monthly averages across all activities. Overall trend: grades are **{trend_direction}**.")
+        st.plotly_chart(trend_chart(grade_trend, "grade", "Average Performance"), use_container_width=True)
     else:
-        st.warning("Not enough data for trend analysis.")
+        st.warning(f"Not enough data for trend analysis. At least {MIN_MONTHS} months of data required (currently {len(grade_trend)}).")
 
     st.divider()
 
     st.subheader("Participants Trend Over Time")
     participants_trend = calculate_trend(df, "participants_avg")
-    if len(participants_trend) > 0:
+    if len(participants_trend) >= MIN_MONTHS:
         trend_direction = "increasing" if participants_trend["trend"].iloc[0] > 0 else "decreasing"
-        st.caption(f"Overall trend: participation is **{trend_direction}**")
+        st.caption(f"Monthly average participants across all activities. Overall trend: participation is **{trend_direction}**.")
         st.plotly_chart(trend_chart(participants_trend, "participants_avg", "Average Participants"), use_container_width=True)
+    else:
+        st.warning(f"Not enough data for trend analysis. At least {MIN_MONTHS} months of data required (currently {len(participants_trend)}).")
 
 # =============================================================================
 # TAB 5: Period Comparison
@@ -334,13 +407,13 @@ with tab5:
 
     with col1:
         st.caption("Period 1")
-        p1_start = st.date_input("Start", min_date, key="p1_start")
-        p1_end = st.date_input("End", max_date, key="p1_end")
+        p1_start = st.date_input("Start", min_date, key="p1_start", min_value=min_date, max_value=max_date)
+        p1_end = st.date_input("End", max_date, key="p1_end", min_value=min_date, max_value=max_date)
 
     with col2:
         st.caption("Period 2")
-        p2_start = st.date_input("Start", min_date, key="p2_start")
-        p2_end = st.date_input("End", max_date, key="p2_end")
+        p2_start = st.date_input("Start", min_date, key="p2_start", min_value=min_date, max_value=max_date)
+        p2_end = st.date_input("End", max_date, key="p2_end", min_value=min_date, max_value=max_date)
 
     if st.button("Compare Periods"):
         comparison = compare_periods(
@@ -458,12 +531,11 @@ with tab6:
                 lambda t: classifier.predict(t).predicted_category
                 if pd.notna(t) and t.strip() else ""
             )
-            display_cols = ["date", "activity", "adjustments", "predicted_category", "participants_avg"]
             export_df = export_df[export_df["predicted_category"] != ""]
-            st.dataframe(export_df[display_cols], use_container_width=True, hide_index=True)
+            st.dataframe(export_df, use_container_width=True, hide_index=True)
             st.download_button(
                 "Download as CSV",
-                export_df[display_cols].to_csv(index=False),
+                export_df.to_csv(index=False),
                 file_name="universeum_data_with_predictions.csv",
                 mime="text/csv",
             )

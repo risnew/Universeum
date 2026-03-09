@@ -16,6 +16,22 @@ COLORS = {
 
 COLOR_SEQUENCE = ["#0077B6", "#00B4D8", "#90E0EF", "#F77F00", "#06D6A0", "#577590", "#CAF0F8", "#FCBF49"]
 
+# Canonical interest level ordering and colors (most interested = darkest)
+INTEREST_LEVEL_ORDER = [
+    "Ej intresserade (de flesta)",
+    "Annan",
+    "Blandat",
+    "Intresserade (de flesta)",
+    "Mycket intresserade (de flesta)",
+]
+INTEREST_LEVEL_COLORS = {
+    "Mycket intresserade (de flesta)": "#0077B6",
+    "Intresserade (de flesta)":        "#00B4D8",
+    "Blandat":                         "#90E0EF",
+    "Annan":                           "#FCBF49",
+    "Ej intresserade (de flesta)":     "#B0B0B0",
+}
+
 LAYOUT_DEFAULTS = dict(
     font=dict(family="Inter, sans-serif", size=12),
     paper_bgcolor="rgba(0,0,0,0)",
@@ -24,24 +40,37 @@ LAYOUT_DEFAULTS = dict(
 )
 
 
-def grade_chart(activity_stats: pd.DataFrame) -> Figure:
+def grade_chart(activity_stats: pd.DataFrame, y_col: str = "activity") -> Figure:
     """Create horizontal bar chart showing average grade per activity."""
+    activity_stats = activity_stats.copy()
     activity_stats = activity_stats.sort_values("avg_grade")
+
+    # Build combined label: "X.X (n=N)"
+    if "count" in activity_stats.columns:
+        activity_stats["text_label"] = activity_stats.apply(
+            lambda r: f"{r['avg_grade']:.1f}  (n={int(r['count'])})", axis=1
+        )
+        text_col = "text_label"
+        texttemplate = "%{text}"
+    else:
+        text_col = "avg_grade"
+        texttemplate = "%{text:.1f}"
+
     bar_height = 35
     fig_height = max(400, len(activity_stats) * bar_height)
 
     fig = px.bar(
         activity_stats,
         x="avg_grade",
-        y="activity",
+        y=y_col,
         orientation="h",
-        text="avg_grade",
+        text=text_col,
         height=fig_height,
         color_discrete_sequence=[COLORS["secondary"]],
     )
 
     fig.update_traces(
-        texttemplate="%{text:.1f}",
+        texttemplate=texttemplate,
         textposition="outside",
         textfont=dict(color="#E0E0E0"),
         marker=dict(cornerradius=4),
@@ -49,7 +78,7 @@ def grade_chart(activity_stats: pd.DataFrame) -> Figure:
 
     max_grade = activity_stats["avg_grade"].max()
     fig.update_xaxes(
-        range=[0, max_grade * 1.15],
+        range=[0, max_grade * 1.2],
         showticklabels=False,
         ticks="",
         title="",
@@ -58,31 +87,44 @@ def grade_chart(activity_stats: pd.DataFrame) -> Figure:
     fig.update_yaxes(showgrid=False)
 
     fig.update_layout(
-        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=40, t=30, b=20)},
+        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=60, t=30, b=20)},
         yaxis=dict(automargin=True),
     )
 
     return fig
 
 
-def participants_chart(activity_participants: pd.DataFrame) -> Figure:
+def participants_chart(activity_participants: pd.DataFrame, y_col: str = "activity") -> Figure:
     """Create horizontal bar chart showing average participants per activity."""
+    activity_participants = activity_participants.copy()
+
+    # Build combined label: "X.X (n=N)"
+    if "count" in activity_participants.columns:
+        activity_participants["text_label"] = activity_participants.apply(
+            lambda r: f"{r['participants_avg']:.1f}  (n={int(r['count'])})", axis=1
+        )
+        text_col = "text_label"
+        texttemplate = "%{text}"
+    else:
+        text_col = "participants_avg"
+        texttemplate = "%{text:.1f}"
+
     bar_height = 35
     fig_height = max(400, len(activity_participants) * bar_height)
 
     fig = px.bar(
         activity_participants,
         x="participants_avg",
-        y="activity",
+        y=y_col,
         orientation="h",
-        text="participants_avg",
+        text=text_col,
         height=fig_height,
-        labels={"participants_avg": "Average participants", "activity": ""},
+        labels={"participants_avg": "Average participants", y_col: ""},
         color_discrete_sequence=[COLORS["secondary"]],
     )
 
     fig.update_traces(
-        texttemplate="%{text:.1f}",
+        texttemplate=texttemplate,
         textposition="outside",
         textfont=dict(color="#E0E0E0"),
         marker=dict(cornerradius=4),
@@ -90,7 +132,7 @@ def participants_chart(activity_participants: pd.DataFrame) -> Figure:
 
     max_participants = activity_participants["participants_avg"].max()
     fig.update_xaxes(
-        range=[0, max_participants * 1.15],
+        range=[0, max_participants * 1.2],
         showticklabels=False,
         ticks="",
         title="",
@@ -99,7 +141,7 @@ def participants_chart(activity_participants: pd.DataFrame) -> Figure:
     fig.update_yaxes(showgrid=False)
 
     fig.update_layout(
-        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=40, t=30, b=20)},
+        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=60, t=30, b=20)},
         yaxis=dict(automargin=True),
     )
 
@@ -107,16 +149,25 @@ def participants_chart(activity_participants: pd.DataFrame) -> Figure:
 
 
 def interest_chart(df: pd.DataFrame) -> Figure:
-    """Create pie chart showing interest level distribution."""
+    """Create pie chart showing interest level distribution with consistent ordering and colors."""
     counts = df["interest_level"].value_counts().reset_index()
     counts.columns = ["interest_level", "count"]
+
+    # Sort by canonical order (most interested last = appears at top of pie)
+    counts["interest_level"] = pd.Categorical(
+        counts["interest_level"], categories=INTEREST_LEVEL_ORDER, ordered=True
+    )
+    counts = counts.sort_values("interest_level")
+
+    colors = [INTEREST_LEVEL_COLORS.get(lvl, COLORS["neutral"]) for lvl in counts["interest_level"].astype(str)]
 
     fig = px.pie(
         counts,
         values="count",
         names="interest_level",
         hole=0.45,
-        color_discrete_sequence=COLOR_SEQUENCE,
+        color="interest_level",
+        color_discrete_map=INTEREST_LEVEL_COLORS,
     )
 
     fig.update_traces(
@@ -132,23 +183,18 @@ def interest_chart(df: pd.DataFrame) -> Figure:
 
 
 def activities_over_time_chart(df: pd.DataFrame) -> Figure:
-    """Create line chart showing activity count by month."""
+    """Create bar chart showing activity count by month."""
     monthly = df.groupby(df["date"].dt.to_period("M")).size().reset_index(name="count")
     monthly["date"] = monthly["date"].dt.to_timestamp()
 
-    fig = px.line(
+    fig = px.bar(
         monthly,
         x="date",
         y="count",
-        markers=True,
         color_discrete_sequence=[COLORS["primary"]],
     )
 
-    fig.update_traces(
-        line=dict(width=3),
-        marker=dict(size=8),
-    )
-
+    fig.update_traces(marker=dict(cornerradius=4))
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.05)")
 
@@ -162,22 +208,34 @@ def activities_over_time_chart(df: pd.DataFrame) -> Figure:
 
 
 def grade_distribution_chart(df: pd.DataFrame) -> Figure:
-    """Create histogram showing grade distribution."""
-    fig = px.histogram(
-        df,
-        x="grade",
-        nbins=6,
+    """Create bar chart showing performance distribution across all 7 grade levels."""
+    grade_counts = df["grade"].value_counts().reindex([1, 2, 3, 4, 5, 6, 7], fill_value=0).reset_index()
+    grade_counts.columns = ["performance", "count"]
+
+    fig = px.bar(
+        grade_counts,
+        x="performance",
+        y="count",
+        text="count",
         color_discrete_sequence=[COLORS["primary"]],
     )
 
-    fig.update_traces(marker=dict(cornerradius=4))
+    fig.update_traces(
+        textposition="outside",
+        textfont=dict(color="#E0E0E0"),
+        marker=dict(cornerradius=4),
+    )
 
-    fig.update_xaxes(showgrid=False)
+    fig.update_xaxes(
+        showgrid=False,
+        tickmode="array",
+        tickvals=[1, 2, 3, 4, 5, 6, 7],
+    )
     fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.05)")
 
     fig.update_layout(
         **LAYOUT_DEFAULTS,
-        xaxis_title="Grade",
+        xaxis_title="Performance",
         yaxis_title="Count",
         bargap=0.15,
     )
@@ -186,21 +244,21 @@ def grade_distribution_chart(df: pd.DataFrame) -> Figure:
 
 
 def activity_heatmap(df: pd.DataFrame) -> Figure:
-    """Create heatmap showing activity count by day of week and hour."""
+    """Create heatmap showing activity count by day of week (x) and hour (y)."""
     df = df.copy()
     df["day_of_week"] = df["date"].dt.day_name()
     df["hour"] = df["time"].apply(lambda t: t.hour if pd.notna(t) else None)
 
     pivot = df.pivot_table(
-        index="day_of_week",
-        columns="hour",
+        index="hour",
+        columns="day_of_week",
         values="activity",
         aggfunc="count",
         fill_value=0,
     )
 
     day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    pivot = pivot.reindex([d for d in day_order if d in pivot.index])
+    pivot = pivot.reindex(columns=[d for d in day_order if d in pivot.columns])
 
     fig = px.imshow(
         pivot,
@@ -210,13 +268,13 @@ def activity_heatmap(df: pd.DataFrame) -> Figure:
     )
 
     fig.update_traces(
-        hovertemplate="Day: %{y}<br>Hour: %{x}:00<br>Sessions: %{z}<extra></extra>"
+        hovertemplate="Weekday: %{x}<br>Hour: %{y}:00<br>Sessions: %{z}<extra></extra>"
     )
 
     fig.update_layout(
         **LAYOUT_DEFAULTS,
-        xaxis_title="Hour",
-        yaxis_title="",
+        xaxis_title="Weekday",
+        yaxis_title="Hour",
     )
 
     return fig
@@ -280,9 +338,30 @@ def line_chart(data: pd.DataFrame, x: str, y: str, y_title: str = "") -> Figure:
     return fig
 
 
-def pie_chart(data: pd.DataFrame, values: str, names: str) -> Figure:
+def bar_chart_time(data: pd.DataFrame, x: str, y: str, y_title: str = "") -> Figure:
+    """Create bar chart for time-series (monthly) data."""
+    fig = px.bar(data, x=x, y=y, color_discrete_sequence=[COLORS["primary"]])
+
+    fig.update_traces(marker=dict(cornerradius=4))
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.05)")
+
+    fig.update_layout(
+        **LAYOUT_DEFAULTS,
+        xaxis_title="",
+        yaxis_title=y_title,
+    )
+    return fig
+
+
+def pie_chart(data: pd.DataFrame, values: str, names: str, color_map: dict | None = None) -> Figure:
     """Create donut chart."""
-    fig = px.pie(data, values=values, names=names, hole=0.45, color_discrete_sequence=COLOR_SEQUENCE)
+    if color_map:
+        fig = px.pie(data, values=values, names=names, hole=0.45,
+                     color=names, color_discrete_map=color_map)
+    else:
+        fig = px.pie(data, values=values, names=names, hole=0.45,
+                     color_discrete_sequence=COLOR_SEQUENCE)
 
     fig.update_traces(
         textposition="outside",
@@ -323,6 +402,37 @@ def horizontal_bar_chart(data: pd.DataFrame, x: str, y: str, x_title: str = "", 
         **LAYOUT_DEFAULTS,
         xaxis_title=x_title,
         yaxis_title="",
+    )
+    return fig
+
+
+def interest_bar_chart(data: pd.DataFrame, x: str, x_title: str = "", text_format: str = ".2f") -> Figure:
+    """Horizontal bar chart with fixed interest level colors and canonical ordering."""
+    data = data.copy()
+    data["interest_level"] = pd.Categorical(
+        data["interest_level"], categories=INTEREST_LEVEL_ORDER, ordered=True
+    )
+    data = data.sort_values("interest_level")
+    colors = [INTEREST_LEVEL_COLORS.get(str(lvl), COLORS["neutral"]) for lvl in data["interest_level"]]
+
+    fig = go.Figure(go.Bar(
+        x=data[x],
+        y=data["interest_level"].astype(str),
+        orientation="h",
+        text=data[x],
+        texttemplate=f"%{{text:{text_format}}}",
+        textposition="outside",
+        textfont=dict(color="#E0E0E0"),
+        marker=dict(color=colors, cornerradius=4),
+    ))
+
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=False)
+    fig.update_layout(
+        **{**LAYOUT_DEFAULTS, "margin": dict(l=20, r=60, t=30, b=20)},
+        xaxis_title=x_title,
+        yaxis_title="",
+        yaxis=dict(automargin=True),
     )
     return fig
 
