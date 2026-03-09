@@ -400,28 +400,46 @@ with tab4:
 with tab5:
     st.subheader("Compare Two Periods")
 
-    col1, col2 = st.columns(2)
+    # Build list of available months as display strings
+    months = sorted(df["date"].dt.to_period("M").unique())
+    month_labels = [m.strftime("%b %Y") for m in months]
+    month_starts = {m.strftime("%b %Y"): m.to_timestamp(how="start") for m in months}
+    month_ends   = {m.strftime("%b %Y"): m.to_timestamp(how="end")   for m in months}
 
-    min_date = df["date"].min().date()
-    max_date = df["date"].max().date()
+    col1, col2 = st.columns(2)
 
     with col1:
         st.caption("Period 1")
-        p1_start = st.date_input("Start", min_date, key="p1_start", min_value=min_date, max_value=max_date)
-        p1_end = st.date_input("End", max_date, key="p1_end", min_value=min_date, max_value=max_date)
+        p1_range = st.select_slider(
+            "Period 1",
+            options=month_labels,
+            value=(month_labels[0], month_labels[len(month_labels) // 2 - 1]),
+            key="p1_range",
+            label_visibility="collapsed",
+        )
 
     with col2:
         st.caption("Period 2")
-        p2_start = st.date_input("Start", min_date, key="p2_start", min_value=min_date, max_value=max_date)
-        p2_end = st.date_input("End", max_date, key="p2_end", min_value=min_date, max_value=max_date)
+        p2_range = st.select_slider(
+            "Period 2",
+            options=month_labels,
+            value=(month_labels[len(month_labels) // 2], month_labels[-1]),
+            key="p2_range",
+            label_visibility="collapsed",
+        )
+
+    p1_start = month_starts[p1_range[0]]
+    p1_end   = month_ends[p1_range[1]]
+    p2_start = month_starts[p2_range[0]]
+    p2_end   = month_ends[p2_range[1]]
 
     if st.button("Compare Periods"):
         comparison = compare_periods(
             df,
-            pd.Timestamp(p1_start),
-            pd.Timestamp(p1_end),
-            pd.Timestamp(p2_start),
-            pd.Timestamp(p2_end),
+            p1_start,
+            p1_end,
+            p2_start,
+            p2_end,
         )
 
         st.divider()
