@@ -338,15 +338,21 @@ def line_chart(data: pd.DataFrame, x: str, y: str, y_title: str = "") -> Figure:
     return fig
 
 
-def bar_chart_time(data: pd.DataFrame, x: str, y: str, y_title: str = "") -> Figure:
+def bar_chart_time(data: pd.DataFrame, x: str, y: str, y_title: str = "", min_months: int = 4) -> Figure:
     """Create bar chart for time-series (monthly) data."""
     MS_PER_DAY = 86_400_000
     fig = px.bar(data, x=x, y=y, color_discrete_sequence=[COLORS["primary"]])
 
-    # Fixed bar width of 25 days so bars stay readable regardless of how many months are shown
+    # Fixed bar width of 25 days so bars don't stretch to fill the axis
     fig.update_traces(marker=dict(cornerradius=4), width=25 * MS_PER_DAY)
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.05)")
+
+    # Ensure x-axis shows at least min_months so a single bar doesn't dominate
+    if len(data) < min_months:
+        center = data[x].mean()
+        half = pd.DateOffset(months=min_months // 2)
+        fig.update_xaxes(range=[center - half, center + half])
 
     fig.update_layout(
         **LAYOUT_DEFAULTS,
