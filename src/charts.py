@@ -456,10 +456,24 @@ def scatter_with_trendline(data: pd.DataFrame, x: str, y: str, x_title: str = ""
     return fig
 
 
+def _pad_hours(df: pd.DataFrame, hour_col: str = "hour", min_span: int = 5) -> pd.DataFrame:
+    """Ensure the hour range spans at least min_span hours by filling missing hours with 0/NaN."""
+    min_h = int(df[hour_col].min())
+    max_h = int(df[hour_col].max())
+    if max_h - min_h < min_span:
+        center = (min_h + max_h) // 2
+        min_h = max(0, center - min_span // 2)
+        max_h = min(23, min_h + min_span)
+    all_hours = pd.DataFrame({hour_col: range(min_h, max_h + 1)})
+    return all_hours.merge(df, on=hour_col, how="left")
+
+
 def hour_distribution_chart(data: pd.DataFrame) -> Figure:
     """Create bar chart showing distribution by hour."""
     hour_counts = data["hour"].value_counts().sort_index().reset_index()
     hour_counts.columns = ["hour", "count"]
+    hour_counts = _pad_hours(hour_counts).fillna({"count": 0})
+    hour_counts["count"] = hour_counts["count"].astype(int)
 
     fig = px.bar(hour_counts, x="hour", y="count", color_discrete_sequence=[COLORS["neutral"]])
 
@@ -479,7 +493,7 @@ def participants_by_hour_chart(data: pd.DataFrame) -> Figure:
     """Create bar chart showing average participants by hour."""
     hourly_avg = data.groupby("hour")["participants_avg"].mean().reset_index()
     hourly_avg.columns = ["hour", "avg_participants"]
-    hourly_avg = hourly_avg.sort_values("hour")
+    hourly_avg = _pad_hours(hourly_avg).sort_values("hour")
 
     fig = px.bar(hourly_avg, x="hour", y="avg_participants", text="avg_participants", color_discrete_sequence=[COLORS["success"]])
 
