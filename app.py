@@ -612,6 +612,10 @@ with tab6:
 st.divider()
 
 with st.expander("View Raw Data"):
+    raw_columns = [col for col in df.columns if col != "participants_avg"]
+    st.dataframe(df[raw_columns], use_container_width=True)
+
+with st.expander("View Full Enriched Data"):
     export_df = df.copy()
     export_df["activity_type"] = export_df["activity"].apply(extract_activity_type)
     export_df["hour"] = export_df["time"].apply(lambda t: t.hour if pd.notna(t) else None)
@@ -624,6 +628,6 @@ with st.expander("View Raw Data"):
     st.download_button(
         "Download as CSV",
         export_df.to_csv(index=False),
-        file_name="universeum_data.csv",
+        file_name="universeum_data_enriched.csv",
         mime="text/csv",
     )
