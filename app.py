@@ -615,7 +615,7 @@ with st.expander("View Raw Data"):
     raw_columns = [col for col in df.columns if col != "participants_avg"]
     st.dataframe(df[raw_columns], use_container_width=True)
 
-with st.expander("View Full Enriched Data"):
+with st.expander("Data for Lena"):
     export_df = df.copy()
     export_df["activity_type"] = export_df["activity"].apply(extract_activity_type)
     export_df["hour"] = export_df["time"].apply(lambda t: t.hour if pd.notna(t) else None)
