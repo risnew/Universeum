@@ -279,7 +279,7 @@ with tab2:
         interest_counts.columns = ["interest_level", "count"]
         if len(interest_counts) > 0:
             st.plotly_chart(
-                pie_chart(interest_counts, "count", "interest_level", color_map=INTEREST_LEVEL_COLORS),
+                interest_bar_chart(interest_counts, "count", "Sessions", ".0f"),
                 use_container_width=True,
             )
 
@@ -333,10 +333,12 @@ with tab3:
 
     with col1:
         st.caption("Participants vs Performance")
-        st.plotly_chart(scatter_with_trendline(df_corr, "participants_avg", "grade", "Participants", "Performance"), use_container_width=True)
+        scatter_fig = scatter_with_trendline(df_corr, "participants_avg", "grade", "Participants", "Performance")
+        scatter_fig.update_yaxes(tickmode="array", tickvals=[1, 2, 3, 4, 5, 6, 7])
+        st.plotly_chart(scatter_fig, use_container_width=True)
 
         corr = df_corr[["participants_avg", "grade"]].corr().iloc[0, 1]
-        st.caption(f"Each point is one session. The line shows the overall trend. Correlation coefficient: **{corr:.2f}**.")
+        st.caption(f"Each dot = one session. Y-axis = grade given (1–7). X-axis = number of participants. The line shows the overall trend. Correlation: **{corr:.2f}**.")
         if corr > 0.1:
             st.caption("Larger groups tend to give slightly higher grades.")
         elif corr < -0.1:
@@ -372,13 +374,22 @@ with tab3:
 # TAB 4: Trends
 # =============================================================================
 MIN_MONTHS = 5
+MIN_SESSIONS_PER_MONTH = 3
 
 with tab4:
+    # Filter out months with too few sessions to avoid misleading outlier months
+    monthly_counts = df.groupby(df["date"].dt.to_period("M")).size()
+    valid_months = monthly_counts[monthly_counts >= MIN_SESSIONS_PER_MONTH].index
+    df_trend = df[df["date"].dt.to_period("M").isin(valid_months)]
+
+    excluded = len(monthly_counts) - len(valid_months)
+    note = f" ({excluded} month(s) with fewer than {MIN_SESSIONS_PER_MONTH} sessions excluded)" if excluded > 0 else ""
+
     st.subheader("Performance Trend Over Time")
-    grade_trend = calculate_trend(df, "grade")
+    grade_trend = calculate_trend(df_trend, "grade")
     if len(grade_trend) >= MIN_MONTHS:
         trend_direction = "improving" if grade_trend["trend"].iloc[0] > 0 else "declining"
-        st.caption(f"Monthly averages across all activities. Overall trend: grades are **{trend_direction}**.")
+        st.caption(f"Monthly average performance across all activities. Overall trend: **{trend_direction}**{note}.")
         st.plotly_chart(trend_chart(grade_trend, "grade", "Average Performance"), use_container_width=True)
     else:
         st.warning(f"Not enough data for trend analysis. At least {MIN_MONTHS} months of data required (currently {len(grade_trend)}).")
@@ -386,10 +397,10 @@ with tab4:
     st.divider()
 
     st.subheader("Participants Trend Over Time")
-    participants_trend = calculate_trend(df, "participants_avg")
+    participants_trend = calculate_trend(df_trend, "participants_avg")
     if len(participants_trend) >= MIN_MONTHS:
         trend_direction = "increasing" if participants_trend["trend"].iloc[0] > 0 else "decreasing"
-        st.caption(f"Monthly average participants across all activities. Overall trend: participation is **{trend_direction}**.")
+        st.caption(f"Monthly average total participants per session, across all activities. Overall trend: **{trend_direction}**{note}.")
         st.plotly_chart(trend_chart(participants_trend, "participants_avg", "Average Participants"), use_container_width=True)
     else:
         st.warning(f"Not enough data for trend analysis. At least {MIN_MONTHS} months of data required (currently {len(participants_trend)}).")

@@ -212,18 +212,20 @@ def grade_distribution_chart(df: pd.DataFrame) -> Figure:
     grade_counts = df["grade"].value_counts().reindex([1, 2, 3, 4, 5, 6, 7], fill_value=0).reset_index()
     grade_counts.columns = ["performance", "count"]
 
+    # Gradient: grade 1 = lightest, grade 7 = darkest
+    grade_colors = ["#CAF0F8", "#90E0EF", "#48CAE4", "#00B4D8", "#0096C7", "#0077B6", "#03045E"]
+
     fig = px.bar(
         grade_counts,
         x="performance",
         y="count",
         text="count",
-        color_discrete_sequence=[COLORS["primary"]],
     )
 
     fig.update_traces(
         textposition="outside",
         textfont=dict(color="#E0E0E0"),
-        marker=dict(cornerradius=4),
+        marker=dict(color=grade_colors, cornerradius=4),
     )
 
     fig.update_xaxes(
@@ -235,7 +237,7 @@ def grade_distribution_chart(df: pd.DataFrame) -> Figure:
 
     fig.update_layout(
         **LAYOUT_DEFAULTS,
-        xaxis_title="Performance",
+        xaxis_title="Performance (1–7)",
         yaxis_title="Count",
         bargap=0.15,
     )
@@ -466,6 +468,8 @@ def scatter_with_trendline(data: pd.DataFrame, x: str, y: str, x_title: str = ""
 
 def _pad_hours(df: pd.DataFrame, hour_col: str = "hour", min_span: int = 5) -> pd.DataFrame:
     """Ensure the hour range spans at least min_span hours by filling missing hours with 0/NaN."""
+    if df.empty or df[hour_col].isna().all():
+        return df
     min_h = int(df[hour_col].min())
     max_h = int(df[hour_col].max())
     if max_h - min_h < min_span:
