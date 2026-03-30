@@ -126,6 +126,20 @@ def extract_activity_type(name: str) -> str:
 
 MIN_SESSIONS = 10
 
+# --- Classifier (loaded once, used in tab6 and raw data export) ---
+training_file = "data/additional_data.csv"
+try:
+    @st.cache_resource
+    def get_trained_classifier():
+        texts, labels = load_training_data(training_file)
+        clf = AdjustmentClassifier()
+        metrics = clf.train(texts, labels)
+        return clf, metrics
+
+    classifier, classifier_metrics = get_trained_classifier()
+except FileNotFoundError:
+    classifier, classifier_metrics = None, None
+
 # --- KPIs ---
 col1, col2, col3 = st.columns(3)
 col1.metric("Total sessions", len(df))
@@ -487,17 +501,8 @@ with tab5:
 # TAB 6: Adjustment Predictor (Beta)
 # =============================================================================
 with tab6:
-    training_file = "data/additional_data.csv"
-
-    try:
-        @st.cache_resource
-        def get_trained_classifier():
-            texts, labels = load_training_data(training_file)
-            classifier = AdjustmentClassifier()
-            metrics = classifier.train(texts, labels)
-            return classifier, metrics
-
-        classifier, metrics = get_trained_classifier()
+    if classifier is not None:
+        metrics = classifier_metrics
 
         # --- Adjustments in Your Data ---
         st.subheader("Adjustments in Your Data")
@@ -598,7 +603,7 @@ with tab6:
             else:
                 st.warning("Please enter some text to predict.")
 
-    except FileNotFoundError:
+    else:
         st.warning("Training data not found. Please ensure 'data/additional_data.csv' exists.")
 
 # =============================================================================
@@ -608,8 +613,13 @@ st.divider()
 
 with st.expander("View Raw Data"):
     export_df = df.copy()
-    export_df["participants_avg"] = export_df["participants_avg"]
     export_df["activity_type"] = export_df["activity"].apply(extract_activity_type)
+    export_df["hour"] = export_df["time"].apply(lambda t: t.hour if pd.notna(t) else None)
+    export_df["day_of_week"] = export_df["date"].dt.day_name()
+    if classifier is not None:
+        export_df["predicted_category"] = export_df["adjustments"].apply(
+            lambda t: classifier.predict(t).predicted_category if pd.notna(t) and str(t).strip() else ""
+        )
     st.dataframe(export_df, use_container_width=True)
     st.download_button(
         "Download as CSV",
