@@ -607,5 +607,13 @@ with tab6:
 st.divider()
 
 with st.expander("View Raw Data"):
-    raw_columns = [col for col in df.columns if col != "participants_avg"]
-    st.dataframe(df[raw_columns], use_container_width=True)
+    export_df = df.copy()
+    export_df["participants_avg"] = export_df["participants_avg"]
+    export_df["activity_type"] = export_df["activity"].apply(extract_activity_type)
+    st.dataframe(export_df, use_container_width=True)
+    st.download_button(
+        "Download as CSV",
+        export_df.to_csv(index=False),
+        file_name="universeum_data.csv",
+        mime="text/csv",
+    )
